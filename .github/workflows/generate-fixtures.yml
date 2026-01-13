@@ -3,6 +3,16 @@ name: Generate Fixtures
 on:
   # Allow manual triggering
   workflow_dispatch: null
+  # Run on push to main (e.g., when examples change)
+  push:
+    branches:
+      - main
+    paths:
+      - examples/**
+      - generator-utils.ts
+      - generate-all.js
+      - dataviews-mock.js
+      - .github/workflows/generate-fixtures.yml
   # Run when base images are updated
   workflow_run:
     workflows: ["Publish Kibana Fixture Images"]
@@ -18,7 +28,10 @@ jobs:
   generate:
     name: Generate Fixtures (${{ matrix.kibana_version }})
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      github.event.workflow_run.conclusion == 'success'
     strategy:
       matrix:
         kibana_version:
