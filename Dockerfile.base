@@ -92,8 +92,41 @@ RUN cd /kibana/src/platform/packages/shared/kbn-es-query/src/kuery/grammar && \
     peggy grammar.peggy && \
     sed -i "s|from './grammar.peggy'|from './grammar.js'|g" index.ts
 
+# Clean up to reduce image size significantly
+# This removes files not needed for fixture generation:
+# - .git directory (~500MB-1GB)
+# - Test files and fixtures (~200-500MB)
+# - Documentation files
+# - TypeScript source maps and declaration files (selectively)
+# - Build caches and temporary files
+RUN rm -rf /kibana/.git && \
+    find /kibana -type d -name "__tests__" -exec rm -rf {} + 2>/dev/null || true && \
+    find /kibana -type d -name "test" -path "*/node_modules/*" -exec rm -rf {} + 2>/dev/null || true && \
+    find /kibana -type d -name "tests" -path "*/node_modules/*" -exec rm -rf {} + 2>/dev/null || true && \
+    find /kibana -type d -name "__snapshots__" -exec rm -rf {} + 2>/dev/null || true && \
+    find /kibana -type d -name "__fixtures__" -exec rm -rf {} + 2>/dev/null || true && \
+    find /kibana -type d -name "__mocks__" -exec rm -rf {} + 2>/dev/null || true && \
+    find /kibana -type f -name "*.test.ts" -delete 2>/dev/null || true && \
+    find /kibana -type f -name "*.test.tsx" -delete 2>/dev/null || true && \
+    find /kibana -type f -name "*.test.js" -delete 2>/dev/null || true && \
+    find /kibana -type f -name "*.spec.ts" -delete 2>/dev/null || true && \
+    find /kibana -type f -name "*.spec.tsx" -delete 2>/dev/null || true && \
+    find /kibana -type f -name "*.spec.js" -delete 2>/dev/null || true && \
+    find /kibana -type f -name "*.md" -not -name "README.md" -delete 2>/dev/null || true && \
+    find /kibana -type f -name "CHANGELOG*" -delete 2>/dev/null || true && \
+    find /kibana -type f -name "LICENSE*" -path "*/node_modules/*" -delete 2>/dev/null || true && \
+    find /kibana -type f -name "*.map" -path "*/node_modules/*" -delete 2>/dev/null || true && \
+    rm -rf /kibana/.cache /kibana/.yarn/cache /root/.cache /root/.npm && \
+    rm -rf /tmp/* /var/tmp/*
+
 # Set Kibana version for runtime use
 ENV KIBANA_VERSION=${KIBANA_VERSION}
+
+# Remove build-time dependencies no longer needed for fixture generation
+# This removes compilers and build tools that were only needed for native modules
+RUN apt-get purge -y --auto-remove build-essential python3 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
 # Create non-root user for security
 RUN groupadd -r fixture && useradd -r -g fixture fixture && \

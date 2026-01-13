@@ -62,7 +62,7 @@ jobs:
           tags: |
             type=raw,value=${{ matrix.kibana_version }}-${{ matrix.arch }}
             type=raw,value=${{ matrix.kibana_version }}-{{date 'YYYYMMDD'}}-${{ matrix.arch }}
-      - name: Build and push Kibana base image
+      - name: Build Kibana base image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -70,9 +70,48 @@ jobs:
           platforms: ${{ matrix.platform }}
           build-args: |
             KIBANA_VERSION=${{ matrix.kibana_version }}
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          push: false
+          load: true
+          tags: kibana-base:build
           labels: ${{ steps.meta.outputs.labels }}
+      - name: Flatten image to reduce size
+        id: flatten
+        run: |
+          echo "Original image size:"
+          docker images kibana-base:build --format "{{.Size}}"
+
+          # Create a container from the image (don't run it)
+          CONTAINER_ID=$(docker create kibana-base:build)
+
+          # Export the container filesystem and import as a new flattened image
+          # This removes all layer history and reduces duplicate file storage
+          docker export "$CONTAINER_ID" | docker import \
+            --change 'ENV NODE_OPTIONS=--max-old-space-size=8192' \
+            --change 'ENV KIBANA_VERSION=${{ matrix.kibana_version }}' \
+            --change 'USER fixture' \
+            --change 'WORKDIR /kibana' \
+            - kibana-base:flattened
+
+          # Clean up the temporary container
+          docker rm "$CONTAINER_ID"
+
+          echo "Flattened image size:"
+          docker images kibana-base:flattened --format "{{.Size}}"
+
+          # Tag the flattened image with the proper tags
+          IFS=$'\n'
+          for tag in ${{ steps.meta.outputs.tags }}; do
+            echo "Tagging as: $tag"
+            docker tag kibana-base:flattened "$tag"
+          done
+      - name: Push flattened image
+        if: github.event_name != 'pull_request'
+        run: |
+          IFS=$'\n'
+          for tag in ${{ steps.meta.outputs.tags }}; do
+            echo "Pushing: $tag"
+            docker push "$tag"
+          done
       - name: Image info
         run: |-
           echo "Built and pushed Kibana base image:"

@@ -39,6 +39,30 @@ build-base: ## Build base image locally
 		-f Dockerfile.base \
 		.
 
+# Build and flatten base image locally (smaller image, slower build)
+.PHONY: build-base-flat
+build-base-flat: ## Build and flatten base image locally (reduces size)
+	@echo "Building base image for $(KIBANA_VERSION)..."
+	docker build \
+		--build-arg KIBANA_VERSION=$(KIBANA_VERSION) \
+		-t $(DOCKER_IMAGE):build \
+		-f Dockerfile.base \
+		.
+	@echo "Original image size:"
+	@docker images $(DOCKER_IMAGE):build --format "{{.Size}}"
+	@echo "Flattening image to reduce size..."
+	@CONTAINER_ID=$$(docker create $(DOCKER_IMAGE):build) && \
+		docker export "$$CONTAINER_ID" | docker import \
+			--change 'ENV NODE_OPTIONS=--max-old-space-size=8192' \
+			--change 'ENV KIBANA_VERSION=$(KIBANA_VERSION)' \
+			--change 'USER fixture' \
+			--change 'WORKDIR /kibana' \
+			- $(DOCKER_IMAGE) && \
+		docker rm "$$CONTAINER_ID" > /dev/null
+	@echo "Flattened image size:"
+	@docker images $(DOCKER_IMAGE) --format "{{.Size}}"
+	@docker rmi $(DOCKER_IMAGE):build > /dev/null 2>&1 || true
+
 # Generate all fixtures
 .PHONY: run
 run: ## Generate all fixtures
