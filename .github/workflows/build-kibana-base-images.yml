@@ -8,6 +8,9 @@ on:
     paths:
       - Dockerfile.base
       - .github/workflows/build-kibana-base-images.yml
+  push:
+    branches:
+      - main
   # Allow manual triggering with default matrix
   workflow_dispatch: null
 
