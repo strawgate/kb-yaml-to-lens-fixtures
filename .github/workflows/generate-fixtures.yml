@@ -1,0 +1,107 @@
+---
+name: Generate Fixtures
+on:
+  # Allow manual triggering
+  workflow_dispatch: null
+  # Run on push to main (e.g., when examples change)
+  push:
+    branches:
+      - main
+    paths:
+      - examples/**
+      - generator-utils.ts
+      - generate-all.js
+      - dataviews-mock.js
+      - .github/workflows/generate-fixtures.yml
+  # Run when base images are updated
+  workflow_run:
+    workflows: ["Publish Kibana Fixture Images"]
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    name: Generate Fixtures (${{ matrix.kibana_version }})
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      github.event.workflow_run.conclusion == 'success'
+    strategy:
+      matrix:
+        kibana_version:
+          - v8.19.9
+          - v9.2.2
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          large-packages: false
+
+      - name: Pull base image
+        run: make pull KIBANA_VERSION=${{ matrix.kibana_version }}
+
+      - name: Generate fixtures
+        run: make run KIBANA_VERSION=${{ matrix.kibana_version }}
+
+      - name: Upload fixtures as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fixtures-${{ matrix.kibana_version }}
+          path: output/${{ matrix.kibana_version }}/
+          retention-days: 1
+
+  commit:
+    name: Commit Fixtures
+    runs-on: ubuntu-latest
+    needs: generate
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all fixture artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: output/
+          pattern: fixtures-*
+          merge-multiple: false
+
+      - name: Move fixtures to correct directories
+        run: |
+          # Downloaded artifacts are in output/fixtures-vX.X.X/
+          # Move them to output/vX.X.X/
+          for dir in output/fixtures-*; do
+            version=$(basename "$dir" | sed 's/fixtures-//')
+            mkdir -p "output/${version}"
+            mv "$dir"/* "output/${version}/" 2>/dev/null || true
+            rmdir "$dir" 2>/dev/null || true
+          done
+          echo "Generated fixtures:"
+          find output -name "*.json" | head -20
+
+      - name: Commit and push fixtures
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add output/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: regenerate fixtures for all Kibana versions
+
+            Generated fixtures for:
+            - v8.19.9
+            - v9.2.2
+
+            [skip ci]"
+            git push
+          fi
