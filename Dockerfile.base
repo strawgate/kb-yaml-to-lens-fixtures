@@ -65,8 +65,9 @@ RUN npm install -g yarn@1.22.19
 # Set heap size for large builds
 ENV NODE_OPTIONS="--max-old-space-size=8192"
 
-# Bootstrap Kibana (this takes ~6 minutes)
-# This makes @kbn/lens-embeddable-utils and other packages available
+# Bootstrap only the required Kibana packages (optimized from ~6 minutes to ~3 minutes)
+# Using --include to target only @kbn/lens-embeddable-utils and its dependencies
+# Using --skip-kibana-plugins to skip all Kibana plugins we don't need
 # Note: bootstrap also builds packages, including compiling .peggy grammar files
 # Note: Kibana's .yarnrc configures an offline mirror which can cause integrity check
 # failures when the cached checksums don't match npm registry. We disable offline
@@ -77,8 +78,8 @@ RUN rm -rf ~/.cache/yarn /usr/local/share/.cache/yarn && \
     if [ -f .yarnrc ]; then \
         sed -i 's/--install.prefer-offline true/--install.prefer-offline false/' .yarnrc; \
     fi && \
-    (yarn kbn bootstrap --allow-root || true) && \
-    yarn kbn bootstrap --allow-root
+    (yarn kbn bootstrap --allow-root --skip-kibana-plugins --include @kbn/lens-embeddable-utils || true) && \
+    yarn kbn bootstrap --allow-root --skip-kibana-plugins --include @kbn/lens-embeddable-utils
 
 # Install global dependencies needed for fixture generation
 # tsx: needed for TypeScript transpilation
