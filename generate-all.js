@@ -77,6 +77,9 @@ async function generateAll() {
   const exampleFiles = await discoverExamples();
   console.log(`Found ${exampleFiles.length} example files\n`);
 
+  const failures = [];
+  let successCount = 0;
+
   for (const filename of exampleFiles) {
     try {
       const { fn, name } = await loadGenerator(filename);
@@ -85,15 +88,31 @@ async function generateAll() {
       await fn();
 
       console.log(`✓ Generated ${displayName}`);
+      successCount++;
     } catch (err) {
       console.error(`✗ Failed to generate ${filename}:`, err.message);
-      process.exit(1);
+      failures.push({ filename, error: err.message });
     }
   }
 
   const kibanaVersion = process.env.KIBANA_VERSION || 'v9.2.0';
-  console.log('\n✓ All fixtures generated successfully');
-  console.log(` Output directory: ./output/${kibanaVersion}/`);
+  console.log(`\nOutput directory: ./output/${kibanaVersion}/`);
+
+  if (failures.length > 0) {
+    console.log(`\n⚠ ${failures.length} fixture(s) failed to generate:`);
+    for (const { filename, error } of failures) {
+      console.log(`  - ${filename}: ${error}`);
+    }
+  }
+
+  if (successCount === 0) {
+    console.error('\n✗ All fixtures failed to generate');
+    process.exit(1);
+  } else if (failures.length > 0) {
+    console.log(`\n✓ Generated ${successCount}/${exampleFiles.length} fixtures successfully`);
+  } else {
+    console.log(`\n✓ All ${successCount} fixtures generated successfully`);
+  }
 }
 
 if (fileURLToPath(import.meta.url) === process.argv[1]) {
