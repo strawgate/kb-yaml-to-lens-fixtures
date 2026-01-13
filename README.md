@@ -21,7 +21,7 @@ Docker-based TypeScript fixture generator using Kibana's `LensConfigBuilder` API
 ## Quick Start
 
 ```bash
-# 1. Pull pre-built base image (one time)
+# 1. Pull pre-built base image (~30 seconds, one time setup)
 make pull
 
 # 2. Generate all fixtures
@@ -30,6 +30,8 @@ make run
 # 3. View generated fixtures
 ls output/v9.2.2/
 ```
+
+> **Important**: Always use `make pull` to get the pre-built images from GitHub Container Registry. Do **not** run `make build-base` unless you're modifying the Dockerfile itself. The pre-built images are published automatically and pulling them takes ~30 seconds vs ~15+ minutes to build locally.
 
 ## Available Commands
 
@@ -41,7 +43,7 @@ ls output/v9.2.2/
 | `make shell` | Open a shell in the container for debugging |
 | `make typecheck` | Run TypeScript type checking |
 | `make test` | Test that @kbn/lens-embeddable-utils can be imported |
-| `make build-base` | Build base image locally (for testing base image changes) |
+| `make build-base` | Build base image locally (**rarely needed** - only for Dockerfile changes) |
 | `make clean` | Remove generated output files |
 
 ## Project Structure
@@ -95,12 +97,28 @@ Both generate valid Kibana Lens visualizations for testing different data source
 
 ## Creating New Fixtures
 
-1. Create a new TypeScript file in `examples/`
-2. Use the `generateDualFixture()` helper (see existing examples)
-3. Run `make run-example EXAMPLE=your-file.ts`
-4. Verify the generated JSON files
+1. **Pull the pre-built image** (if you haven't already):
+   ```bash
+   make pull  # Fast: ~30 seconds
+   ```
 
-**Example**: See `examples/metric-basic.ts` for a minimal example.
+2. **Create a new TypeScript file** in `examples/`
+   - Use the `generateDualFixture()` helper (see existing examples)
+   - See `examples/metric-basic.ts` for a minimal example
+
+3. **Generate the fixtures**:
+   ```bash
+   make run-example EXAMPLE=your-file.ts
+   ```
+
+4. **Verify and commit** the generated JSON files:
+   ```bash
+   ls output/v9.2.2/your-file-*.json
+   git add examples/your-file.ts output/v9.2.2/your-file-*.json
+   git commit -m "Add your-file fixture"
+   ```
+
+> **Remember**: Always commit both your example script AND the generated fixture files. The fixtures are the actual test artifacts that downstream projects consume.
 
 **For detailed guidance**, see [FIXTURES.md](FIXTURES.md).
 
@@ -148,13 +166,23 @@ The fixture generator uses pre-built Kibana base images published to GitHub Cont
 - **Updates**: Built weekly via GitHub Actions
 - **Multi-arch**: Supports amd64 and arm64
 
-**Using different versions**:
+### Pulling Images (Recommended)
+
+Always pull pre-built images - it's fast (~30 seconds) and they're always up to date:
+
 ```bash
+# Default version (v9.2.2)
+make pull
+
+# Specific version
 make pull KIBANA_VERSION=v8.19.9
 make run KIBANA_VERSION=v8.19.9
 ```
 
-**Building locally** (for testing base image changes):
+### Building Locally (Rarely Needed)
+
+> **Warning**: Only build locally if you're modifying `Dockerfile.base`. Building takes 15+ minutes and requires significant resources. For normal fixture development, always use `make pull`.
+
 ```bash
 make build-base KIBANA_VERSION=v9.2.0
 ```
