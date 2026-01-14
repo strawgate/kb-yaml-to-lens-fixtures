@@ -86,10 +86,12 @@ export async function generateDualFixture(
   callerFilePath: string
 ): Promise<void> {
   const errors: string[] = [];
+  let successCount = 0;
 
   // Generate ES|QL variant
   try {
     await generateFixture(`${baseName}-esql.json`, esqlConfig, options, callerFilePath);
+    successCount++;
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     errors.push(`ES|QL variant: ${errorMessage}`);
@@ -98,13 +100,20 @@ export async function generateDualFixture(
   // Generate Data View variant
   try {
     await generateFixture(`${baseName}-dataview.json`, dataviewConfig, options, callerFilePath);
+    successCount++;
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     errors.push(`Data View variant: ${errorMessage}`);
   }
 
-  if (errors.length > 0) {
+  // Only throw if BOTH variants failed
+  if (successCount === 0) {
     throw new Error(`Failed to generate ${baseName}: ${errors.join('; ')}`);
+  }
+
+  // Log partial failures but don't throw
+  if (errors.length > 0) {
+    console.warn(`⚠ Partial failure for ${baseName}: ${errors.join('; ')}`);
   }
 }
 
